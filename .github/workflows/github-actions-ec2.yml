@@ -7,49 +7,22 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to EC2 on main branch push
-    runs-on: ubuntu-latest
+    name: Deploy on EC2 Self-Hosted Runner
+    runs-on: self-hosted  # Runs directly on your EC2 instance
 
     steps:
-      - name: Checkout the files
+      - name: Checkout the repository
         uses: actions/checkout@v2
 
-      - name: Setup SSH Known Hosts
+      - name: Update System and Install Apache
         run: |
-          mkdir -p $HOME/.ssh  # Create SSH directory if it doesn't exist
-          ssh-keyscan -H ${{ secrets.HOST_DNS }} > $HOME/.ssh/known_hosts  # Use '>' instead of '>>' to create the file
-          chmod 644 $HOME/.ssh/known_hosts  # Use 644 instead of 600 to avoid permission errors
+          sudo apt-get update -y
+          sudo apt-get install -y apache2
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
 
-      - name: Debug SSH Connection
-        run: ssh -v -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST_DNS }} "echo SSH is working!"
-
-      
-      - name: Test SSH Connection
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.HOST_DNS }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: echo "SSH Connection Successful!"
-
-      - name: Deploy to EC2
-        uses: easingthemes/ssh-deploy@main
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          REMOTE_HOST: ${{ secrets.HOST_DNS }}
-          REMOTE_USER: ${{ secrets.USERNAME }}
-          TARGET: ${{ secrets.TARGET_DIR }}
-
-      - name: Run Remote Commands on EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.HOST_DNS }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo apt-get -y update
-            sudo apt-get install -y apache2
-            sudo systemctl start apache2
-            sudo systemctl enable apache2
-            cd ${{ secrets.TARGET_DIR }}
-            sudo mv * /var/www/html
+      - name: Deploy Application Files
+        run: |
+          sudo cp -r . /var/www/html
+          sudo chown -R www-data:www-data /var/www/html
+          sudo systemctl restart apache2
