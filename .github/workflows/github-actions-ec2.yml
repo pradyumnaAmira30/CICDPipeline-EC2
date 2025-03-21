@@ -3,7 +3,7 @@ name: Push-to-EC2
 on:
   push:
     branches:
-      - main
+      - main  # Runs the workflow when code is pushed to the main branch
 
 jobs:
   deploy:
@@ -12,17 +12,43 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Update System and Install Apache
+      - name: Update System and Install Docker
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y apache2
-          sudo systemctl start apache2
-          sudo systemctl enable apache2
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          sudo usermod -aG docker $USER
 
-      - name: Deploy Application Files
+      - name: Login to GitHub Container Registry (GHCR)
         run: |
-          sudo cp -r . /var/www/html
-          sudo chown -R www-data:www-data /var/www/html
-          sudo systemctl restart apache2
+          echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+      - name: Pull Docker Image from GHCR
+        run: |
+          IMAGE_NAME="ghcr.io/${{ secrets.GHCR_USERNAME }}/newimage:latest"
+          echo "Pulling image: $IMAGE_NAME"
+          docker pull $IMAGE_NAME
+
+      - name: Stop and Remove Existing Docker Container
+        run: |
+          CONTAINER_NAME="newimage_container"
+          if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+            echo "Stopping and removing existing container..."
+            docker stop $CONTAINER_NAME
+            docker rm $CONTAINER_NAME
+          else
+            echo "No existing container found."
+          fi
+
+      - name: Run Docker Container
+        run: |
+          IMAGE_NAME="ghcr.io/${{ secrets.GHCR_USERNAME }}/newimage:latest"
+          CONTAINER_NAME="newimage_container"
+          echo "Running new container..."
+          docker run -d --name $CONTAINER_NAME --restart=always -p 8081:80 $IMAGE_NAME
+
+      - name: Verify Deployment
+        run: curl -I http://localhost:8081
