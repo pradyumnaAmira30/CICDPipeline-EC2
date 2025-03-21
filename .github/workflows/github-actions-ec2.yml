@@ -14,8 +14,11 @@ jobs:
       - name: Checkout the files
         uses: actions/checkout@v2
 
-      - name: Add EC2 to known hosts
-        run: ssh-keyscan -H ${{ secrets.HOST_DNS }} >> ~/.ssh/known_hosts
+      - name: Setup SSH Known Hosts
+        run: |
+          mkdir -p ~/.ssh  # Ensure SSH directory exists
+          ssh-keyscan -H ${{ secrets.HOST_DNS }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts  # Set correct permissions
 
       - name: Test SSH Connection
         uses: appleboy/ssh-action@master
@@ -25,7 +28,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: echo "SSH Connection Successful!"
 
-      - name: Deploy to Server
+      - name: Deploy to EC2
         uses: easingthemes/ssh-deploy@main
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -33,7 +36,7 @@ jobs:
           REMOTE_USER: ${{ secrets.USERNAME }}
           TARGET: ${{ secrets.TARGET_DIR }}
 
-      - name: Executing remote SSH commands
+      - name: Run Remote Commands on EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST_DNS }}
