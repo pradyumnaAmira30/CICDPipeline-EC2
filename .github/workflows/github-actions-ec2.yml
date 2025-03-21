@@ -16,10 +16,13 @@ jobs:
 
       - name: Setup SSH Known Hosts
         run: |
-             mkdir -p ~/.ssh  # Ensure SSH directory exists
-             touch ~/.ssh/known_hosts  # Ensure the file exists before chmod
-             ssh-keyscan -H ${{ secrets.HOST_DNS }} >> ~/.ssh/known_hosts
-             chmod 600 ~/.ssh/known_hosts  # Set correct permissions
+          mkdir -p $HOME/.ssh  # Create SSH directory if it doesn't exist
+          ssh-keyscan -H ${{ secrets.HOST_DNS }} > $HOME/.ssh/known_hosts  # Use '>' instead of '>>' to create the file
+          chmod 644 $HOME/.ssh/known_hosts  # Use 644 instead of 600 to avoid permission errors
+
+      - name: Debug SSH Connection
+        run: ssh -v -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST_DNS }} "echo SSH is working!"
+
       
       - name: Test SSH Connection
         uses: appleboy/ssh-action@master
