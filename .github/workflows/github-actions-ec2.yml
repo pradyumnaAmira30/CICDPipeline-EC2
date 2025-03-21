@@ -34,4 +34,5 @@ jobs:
             sudo systemctl restart apache2
             sudo systemctl enable apache2
             cd ${{ secrets.TARGET_DIR }}
-            sudo mv * /var/www/html/
+            sudo mv * /var/www/html
+
