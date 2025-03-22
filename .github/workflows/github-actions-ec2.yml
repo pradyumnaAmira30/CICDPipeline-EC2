@@ -17,20 +17,29 @@ jobs:
       - name: Update System and Install Docker
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y docker.io
+          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+          sudo apt-get update -y
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
           sudo systemctl start docker
           sudo systemctl enable docker
           sudo usermod -aG docker $USER
+          newgrp docker
+          
+      - name: Ensure Docker Can Run Without Sudo
+        run: sudo chmod 666 /var/run/docker.sock
 
       - name: Login to GitHub Container Registry (GHCR)
         run: |
           echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+          docker info  # Debugging step
 
       - name: Pull Docker Image from GHCR
         run: |
           IMAGE_NAME="ghcr.io/${{ secrets.GHCR_USERNAME }}/newimage:latest"
           echo "Pulling image: $IMAGE_NAME"
-          docker pull $IMAGE_NAME
+          docker pull $IMAGE_NAME || (echo "Docker pull failed!" && exit 1)
 
       - name: Stop and Remove Existing Docker Container
         run: |
@@ -48,7 +57,14 @@ jobs:
           IMAGE_NAME="ghcr.io/${{ secrets.GHCR_USERNAME }}/newimage:latest"
           CONTAINER_NAME="newimage_container"
           echo "Running new container..."
-          docker run -d --name $CONTAINER_NAME --restart=always -p 8081:80 $IMAGE_NAME
+          docker run -d --name $CONTAINER_NAME --restart=always -p 8081:80 $IMAGE_NAME || (echo "Container failed to start!" && docker logs $CONTAINER_NAME && exit 1)
 
       - name: Verify Deployment
-        run: curl -I http://localhost:8081
+        run: |
+          echo "Waiting for service to start..."
+          for i in {1..10}; do
+            curl -I http://localhost:8081 && exit 0
+            echo "Retrying in 3 seconds..."
+            sleep 3
+          done
+          echo "Service did not start in time!" && exit 1
