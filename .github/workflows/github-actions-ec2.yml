@@ -6,27 +6,47 @@ on:
       - main  # Runs the workflow when code is pushed to the main branch
 
 jobs:
+  restart-runner:
+    runs-on: ubuntu-latest  # Runs on a GitHub-hosted runner
+    steps:
+      - name: Start Self-Hosted Runner on EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd actions-runner
+            sudo ./svc.sh start
+            echo "Runner started successfully"
+
   deploy:
     name: Deploy on EC2 Self-Hosted Runner
     runs-on: self-hosted  # Runs directly on your EC2 instance
+    needs: restart-runner  # Ensures this runs after restart-runner
 
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v3
 
-      - name: Update System and Install Docker
+      - name: Check & Install Docker if Not Installed
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-          sudo apt-get update -y
-          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          sudo usermod -aG docker $USER
-          newgrp docker
-          
+          if ! command -v docker &> /dev/null; then
+            echo "Docker not found! Installing..."
+            sudo apt-get update -y
+            sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+            sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+            sudo apt-get update -y
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker $USER
+            newgrp docker
+          else
+            echo "Docker is already installed. Skipping installation."
+          fi
+
       - name: Ensure Docker Can Run Without Sudo
         run: sudo chmod 666 /var/run/docker.sock
 
@@ -63,7 +83,10 @@ jobs:
         run: |
           echo "Waiting for service to start..."
           for i in {1..10}; do
-            curl -I http://localhost:8081 && exit 0
+            if curl -I http://localhost:8081; then
+              echo "Service is running!"
+              exit 0
+            fi
             echo "Retrying in 3 seconds..."
             sleep 3
           done
