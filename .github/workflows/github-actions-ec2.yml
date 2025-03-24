@@ -6,24 +6,9 @@ on:
       - main  # Runs the workflow when code is pushed to the main branch
 
 jobs:
-  restart-runner:
-    runs-on: ubuntu-latest  # Runs on a GitHub-hosted runner
-    steps:
-      - name: Start Self-Hosted Runner on EC2
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.HOST_DNS }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd actions-runner
-            sudo ./svc.sh start
-            echo "Runner started successfully"
-
   deploy:
     name: Deploy on EC2 Self-Hosted Runner
     runs-on: self-hosted  # Runs directly on your EC2 instance
-    needs: restart-runner  # Ensures this runs after restart-runner
 
     steps:
       - name: Checkout the repository
@@ -42,7 +27,7 @@ jobs:
             sudo systemctl start docker
             sudo systemctl enable docker
             sudo usermod -aG docker $USER
-            newgrp docker
+            echo "Docker installed successfully."
           else
             echo "Docker is already installed. Skipping installation."
           fi
@@ -84,7 +69,7 @@ jobs:
           echo "Waiting for service to start..."
           for i in {1..10}; do
             if curl -I http://localhost:8081; then
-              echo "Service is running!"
+              echo "Service is up!"
               exit 0
             fi
             echo "Retrying in 3 seconds..."
